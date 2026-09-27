@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}Emails · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">All Emails</h1>
+        <p class="page-subtitle">{{ total }} messages · Search, filter, and analyze</p>
+    </div>
+    <div class="page-actions">
+        <a href="/api/export/csv" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+            Export CSV
+        </a>
+    </div>
+</div>
+
+<!-- Gmail-style large search bar -->
+<div class="gmail-search-wrap">
+    <form method="get" id="searchForm" class="gmail-search">
+        <button type="submit" class="gmail-search-btn" title="Search">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </button>
+        <input
+            type="text"
+            name="q"
+            value="{{ q }}"
+            id="qInput"
+            class="gmail-search-input"
+            placeholder="Search mail — try   from:john   subject:invoice   is:unread   has:attachment"
+            autocomplete="off"
+        >
+        <button type="button" class="gmail-search-adv" id="btnAdvToggle" title="Advanced filters">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/></svg>
+        </button>
+        {% if q %}
+        <a href="{{ url_for('emails_page') }}" class="gmail-search-clear" title="Clear search">✕</a>
+        {% endif %}
+        <input type="hidden" name="category" value="{{ category or '' }}">
+        <input type="hidden" name="sort" value="{{ sort_by }}">
+    </form>
+
+    <!-- Search operator hints -->
+    <div class="search-hints" id="searchHints">
+        <div class="hint-row">
+            <strong>Search operators:</strong>
+            <button type="button" class="hint-chip" data-op="from:">from:</button>
+            <button type="button" class="hint-chip" data-op="to:">to:</button>
+            <button type="button" class="hint-chip" data-op="subject:">subject:</button>
+            <button type="button" class="hint-chip" data-op="is:unread">is:unread</button>
+            <button type="button" class="hint-chip" data-op="is:starred">is:starred</button>
+            <button type="button" class="hint-chip" data-op="has:attachment">has:attachment</button>
+            <button type="button" class="hint-chip" data-op="has:analysis">has:analysis</button>
+            <button type="button" class="hint-chip" data-op="category:work">category:work</button>
+            <button type="button" class="hint-chip" data-op="priority:high">priority:high</button>
+        </div>
+    </div>
+
+    <!-- Advanced filter panel (hidden by default) -->
+    <div class="adv-panel" id="advPanel" style="display:none;">
+        <form method="get" class="adv-grid">
+            <input type="hidden" name="q" value="{{ q }}">
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select name="category" class="select">
+                    <option value="">All</option>
+                    {% for c in ['work', 'personal', 'finance', 'travel', 'shopping', 'promotional', 'newsletter', 'security', 'social', 'other'] %}
+                    <option value="{{ c }}" {% if category == c %}selected{% endif %}>{{ c|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Priority</label>
+                <select name="priority_min" class="select">
+                    <option value="">Any</option>
+                    <option value="8" {% if priority_min == 8 %}selected{% endif %}>High (≥8)</option>
+                    <option value="5" {% if priority_min == 5 %}selected{% endif %}>Medium (≥5)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sort by</label>
+                <select name="sort" class="select">
+                    <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Newest first</option>
+                    <option value="priority" {% if sort_by == 'priority' %}selected{% endif %}>Priority</option>
+                    <option value="sender" {% if sort_by == 'sender' %}selected{% endif %}>Sender</option>
+                    <option value="subject" {% if sort_by == 'subject' %}selected{% endif %}>Subject</option>
+                </select>
+            </div>
+            <div class="form-group" style="align-self:end;">
+                <button class="btn btn-primary btn-block">Apply filters</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+{% if emails %}
+    <div class="email-list" id="emailList">
+        {% for e in emails %}
+        <a class="email-row {% if not e.is_read %}unread{% endif %}" href="{{ url_for('email_detail', email_id=e.id) }}">
+            <div class="email-avatar">{{ (e.sender or e.sender_email or '?')[0]|upper }}</div>
+            <div class="email-main">
+                <div class="email-top">
+                    <div class="email-sender">{{ e.sender or e.sender_email }}</div>
+                    <div class="email-date">{{ e.date[:16].replace('T',' ') if e.date else '' }}</div>
+                </div>
+                <div class="email-subject">{{ e.subject or '(no subject)' }}</div>
+                <div class="email-snippet">{{ e.snippet }}</div>
+            </div>
+            <div class="email-meta">
+                {% if e.priority and e.priority >= 8 %}<span class="chip chip-priority-high">HIGH</span>{% endif %}
+                {% if e.category %}<span class="chip chip-{{ e.category }}">{{ e.category }}</span>{% endif %}
+                {% if e.attachments and e.attachments|length > 0 %}<span title="{{ e.attachments|length }} attachment(s)" style="color:var(--text-muted);">📎</span>{% endif %}
+                {% if e.is_starred %}<span title="starred" style="color:var(--warning);">★</span>{% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="pagination">
+        {% set total_pages = (total // limit) + (1 if total % limit else 0) %}
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&q={{ q }}&category={{ category or '' }}&sort={{ sort_by }}">← Prev</a>
+        {% else %}
+        <span class="disabled">← Prev</span>
+        {% endif %}
+        <span class="current">{{ page }} / {{ total_pages or 1 }}</span>
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}&q={{ q }}&category={{ category or '' }}&sort={{ sort_by }}">Next →</a>
+        {% else %}
+        <span class="disabled">Next →</span>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <h3>No emails match</h3>
+        <p>Try adjusting your search or filters, or load some data first.</p>
+        <div><a href="{{ url_for('index') }}" class="btn btn-primary">Back to dashboard</a></div>
+    </div>
+{% endif %}
+</div>
+
+<style>
+.gmail-search-wrap {
+    margin-bottom: 20px;
+}
+.gmail-search {
+    display: flex;
+    align-items: center;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 4px 4px 12px;
+    box-shadow: var(--shadow-sm);
+    transition: all .15s ease;
+}
+.gmail-search:focus-within {
+    box-shadow: 0 0 0 3px var(--primary-soft), var(--shadow);
+    border-color: var(--primary);
+}
+.gmail-search-btn, .gmail-search-adv, .gmail-search-clear {
+    background: transparent;
+    border: none;
+    padding: 10px;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 15px;
+    transition: all .15s ease;
+}
+.gmail-search-btn:hover, .gmail-search-adv:hover, .gmail-search-clear:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+.gmail-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 12px 8px;
+    font-size: 15px;
+    color: var(--text);
+    font-family: inherit;
+}
+.gmail-search-input::placeholder { color: var(--text-subtle); }
+
+.search-hints {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 4px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow-x: auto;
+}
+.hint-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.hint-chip {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    transition: all .15s ease;
+}
+.hint-chip:hover {
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.adv-panel {
+    margin-top: 12px;
+    padding: 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.adv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+.adv-grid .form-group { margin-bottom: 0; }
+</style>
+
+<script>
+const qInput = document.getElementById('qInput');
+const searchForm = document.getElementById('searchForm');
+const advPanel = document.getElementById('advPanel');
+const btnAdv = document.getElementById('btnAdvToggle');
+
+// Quick-insert operator chips
+document.querySelectorAll('.hint-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        const op = chip.dataset.op;
+        const current = qInput.value.trim();
+        // Don't duplicate if already there
+        if (current.includes(op)) {
+            qInput.focus();
+            return;
+        }
+        qInput.value = current ? `${current} ${op}` : op;
+        qInput.focus();
+        // For value-less operators (is:X, has:X), submit; otherwise wait for user
+        if (op.endsWith(':unread') || op.endsWith(':starred') || op.endsWith(':attachment') || op.endsWith(':analysis') || op.startsWith('category:') || op.startsWith('priority:')) {
+            searchForm.submit();
+        }
+    });
+});
+
+btnAdv.addEventListener('click', (e) => {
+    e.preventDefault();
+    advPanel.style.display = advPanel.style.display === 'none' ? 'block' : 'none';
+});
+
+// Debounced instant search — submits after 500ms of no typing
+let searchTimer;
+qInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        if (qInput.value.length === 0 || qInput.value.length >= 2) {
+            searchForm.submit();
+        }
+    }, 500);
+});
+
+// Enter key submits immediately
+qInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(searchTimer);
+        searchForm.submit();
+    }
+    if (e.key === 'Escape') {
+        qInput.value = '';
+        window.location.href = "{{ url_for('emails_page') }}";
+    }
+});
+
+// Focus the search bar on '/' key
+document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        qInput.focus();
+    }
+});
+</script>
+{% endblock %}

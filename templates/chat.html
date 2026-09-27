@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}AI Chat · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Chat with your Inbox</h1>
+        <p class="page-subtitle">Ask questions, send emails, or manage your inbox · Powered by LLM + your email data</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-ghost" id="btnClearChat">Clear conversation</button>
+    </div>
+</div>
+
+<div class="chat-wrapper">
+    <div class="chat-messages" id="chatMessages">
+        {% if history %}
+            {% for msg in history %}
+            <div class="chat-msg chat-msg-{{ msg.role }}">
+                {{ msg.content|replace('\n', '<br>')|safe }}
+                {% if msg.referenced_emails and msg.role == 'assistant' %}
+                <div class="chat-references">
+                    Referenced:
+                    {% for ref in msg.referenced_emails[:3] %}
+                    <a href="/email/{{ ref }}">#{{ ref }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="chat-empty">
+                <h3>Ask anything about your emails</h3>
+                <p>Get instant answers, summaries, and insights from your inbox.</p>
+                <div class="suggested-questions">
+                    <button class="suggested-question" data-q="What are the most urgent emails I need to respond to?">🔥 What are the most urgent emails I need to respond to?</button>
+                    <button class="suggested-question" data-q="Summarize what's happening at work this week.">💼 Summarize what's happening at work this week.</button>
+                    <button class="suggested-question" data-q="What action items do I have outstanding?">✅ What action items do I have outstanding?</button>
+                    <button class="suggested-question" data-q="Are there any invoices or payments due?">💰 Are there any invoices or payments due?</button>
+                    <button class="suggested-question" data-q="Who has emailed me the most recently?">👥 Who has emailed me the most recently?</button>
+                    <button class="suggested-question" data-q="Any security alerts I should be aware of?">🛡️ Any security alerts I should be aware of?</button>
+                    <button class="suggested-question" data-q="Send an email to mom saying I'll be home for dinner">📤 Send an email to mom saying I'll be home for dinner</button>
+                    <button class="suggested-question" data-q="Delete email #1">🗑️ Delete email #1</button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <form class="chat-input-row" id="chatForm">
+        <input type="text" class="input" id="chatInput" placeholder="Type or speak your command... (Press Enter to send)" autocomplete="off" required>
+        <button type="button" class="btn btn-ghost" id="voiceBtn" title="Voice input" style="padding:8px 10px;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
+        </button>
+        <button type="submit" class="btn btn-primary" id="chatSend">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            Send
+        </button>
+    </form>
+</div>
+
+<script>
+const messagesEl = document.getElementById('chatMessages');
+const form = document.getElementById('chatForm');
+const input = document.getElementById('chatInput');
+const sendBtn = document.getElementById('chatSend');
+
+function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+scrollToBottom();
+
+function appendMessage(role, content, refs = null) {
+    // clear empty state on first message
+    const empty = messagesEl.querySelector('.chat-empty');
+    if (empty) empty.remove();
+
+    const div = document.createElement('div');
+    div.className = `chat-msg chat-msg-${role}`;
+    div.innerHTML = String(content).replace(/</g, '&lt;').replace(/\n/g, '<br>');
+    if (refs && refs.length) {
+        const refDiv = document.createElement('div');
+        refDiv.className = 'chat-references';
+        refDiv.innerHTML = 'Referenced: ' + refs.map(r =>
+            `<a href="/email/${r.id}" title="${escapeHtml(r.subject)}">#${r.id} ${escapeHtml((r.sender || '').substring(0, 20))}</a>`
+        ).join(' · ');
+        div.appendChild(refDiv);
+    }
+    messagesEl.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+async function send(question) {
+    if (!question.trim()) return;
+    appendMessage('user', question);
+    input.value = '';
+    input.disabled = true;
+    sendBtn.disabled = true;
+    const thinking = appendMessage('assistant', '⏳ Thinking...');
+    try {
+        const r = await api('/api/chat', { method: 'POST', body: { message: question } });
+        thinking.remove();
+        appendMessage('assistant', r.answer, r.referenced);
+    } catch (e) {
+        thinking.remove();
+        appendMessage('assistant', `Error: ${e.message}`);
+    } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    send(input.value);
+});
+
+document.querySelectorAll('.suggested-question').forEach(btn => {
+    btn.addEventListener('click', () => send(btn.dataset.q));
+});
+
+document.getElementById('btnClearChat').addEventListener('click', async () => {
+    if (!confirm('Clear the entire conversation?')) return;
+    await api('/api/chat/clear', { method: 'POST' });
+    location.reload();
+});
+
+// ---- Voice Input (Web Speech API) ----
+const voiceBtn = document.getElementById('voiceBtn');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    let listening = false;
+
+    voiceBtn.addEventListener('click', () => {
+        if (listening) {
+            recognition.stop();
+            return;
+        }
+        recognition.start();
+        listening = true;
+        voiceBtn.style.color = 'var(--danger)';
+        voiceBtn.title = 'Listening... Click to stop';
+    });
+
+    recognition.addEventListener('result', (e) => {
+        const transcript = e.results[0][0].transcript;
+        input.value = transcript;
+        input.focus();
+    });
+
+    recognition.addEventListener('end', () => {
+        listening = false;
+        voiceBtn.style.color = '';
+        voiceBtn.title = 'Voice input';
+    });
+
+    recognition.addEventListener('error', () => {
+        listening = false;
+        voiceBtn.style.color = '';
+        voiceBtn.title = 'Voice input';
+    });
+} else {
+    voiceBtn.style.display = 'none';
+}
+</script>
+{% endblock %}

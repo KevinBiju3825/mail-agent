@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Configure your email connection, AI model, and app preferences</p>
+    </div>
+</div>
+
+<div class="grid-2">
+
+<!-- ==================== EMAIL CONNECTION ==================== -->
+<div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header">
+        <div class="card-title">📧 Email Account</div>
+        {% if any_connected %}
+        <span class="chip" style="background:var(--success-soft); color:var(--success);">✓ Connected</span>
+        {% else %}
+        <span class="chip" style="background:var(--warning-soft); color:var(--warning);">Not connected</span>
+        {% endif %}
+    </div>
+
+    {% if imap_connected and imap_credentials %}
+    <!-- IMAP is connected -->
+    <div style="display:flex; gap:12px; align-items:center; padding:16px; background:var(--bg-hover); border-radius:10px; margin-bottom:14px;">
+        <div class="avatar" style="width:48px; height:48px;">{{ imap_credentials.email[0]|upper }}</div>
+        <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; font-size:15px;">{{ imap_credentials.email }}</div>
+            <div class="text-sm text-muted">Connected via IMAP · {{ imap_credentials.imap_host }}</div>
+        </div>
+        <span class="chip" style="background:var(--success-soft); color:var(--success);">IMAP</span>
+    </div>
+    <form action="{{ url_for('imap_disconnect') }}" method="POST">
+        <button type="submit" class="btn btn-danger">Disconnect account</button>
+    </form>
+
+    {% elif gmail_connected and current_account %}
+    <!-- OAuth is connected -->
+    <div style="display:flex; gap:12px; align-items:center; padding:16px; background:var(--bg-hover); border-radius:10px; margin-bottom:14px;">
+        <div class="avatar" style="width:48px; height:48px;">{{ current_account.email[0]|upper }}</div>
+        <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; font-size:15px;">{{ current_account.email }}</div>
+            <div class="text-sm text-muted">Connected via Google OAuth · Last sync: {{ current_account.last_sync[:16].replace('T', ' ') if current_account.last_sync else 'never' }}</div>
+        </div>
+        <span class="chip" style="background:var(--success-soft); color:var(--success);">OAuth</span>
+    </div>
+    <form action="{{ url_for('oauth_disconnect') }}" method="POST">
+        <button type="submit" class="btn btn-danger">Disconnect Gmail</button>
+    </form>
+
+    {% else %}
+    <!-- Not connected: show tabbed options, App Password first -->
+
+    <div style="display:flex; gap:6px; border-bottom:1px solid var(--border); margin-bottom:20px;">
+        <button class="tab-btn tab-active" data-tab="imap">🔑 App Password (Recommended)</button>
+        <button class="tab-btn" data-tab="oauth">🔐 Google OAuth (Advanced)</button>
+    </div>
+
+    <!-- =========== APP PASSWORD PANEL =========== -->
+    <div id="tab-imap" class="tab-panel">
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:24px;">
+            <form action="{{ url_for('imap_connect') }}" method="POST">
+                <div class="form-group">
+                    <label class="form-label">Email provider</label>
+                    <select class="select" name="provider" id="providerSelect">
+                        {% for key, p in imap_providers.items() %}
+                        <option value="{{ key }}" data-imap-host="{{ p.imap_host }}" data-imap-port="{{ p.imap_port }}" data-smtp-host="{{ p.smtp_host }}" data-smtp-port="{{ p.smtp_port }}" data-help-url="{{ p.help_url }}" data-help-text="{{ p.help_text }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Your full name</label>
+                    <input type="text" name="display_name" class="input" required placeholder="e.g. Darshan R" autocomplete="name">
+                    <div class="form-hint">Used as the sender name when sending emails via AI Chat</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Email address</label>
+                    <input type="email" name="email" class="input" required placeholder="you@gmail.com" autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">App Password</label>
+                    <input type="password" name="password" class="input" required placeholder="16-character app password" autocomplete="new-password">
+                    <div class="form-hint">This is NOT your regular email password. See setup guide on the right →</div>
+                </div>
+
+                <div id="customFields" style="display:none;">
+                    <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+                        <div class="form-group">
+                            <label class="form-label">IMAP host</label>
+                            <input type="text" name="imap_host" class="input" placeholder="imap.example.com" id="customImapHost">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Port</label>
+                            <input type="number" name="imap_port" class="input" value="993" id="customImapPort">
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+                        <div class="form-group">
+                            <label class="form-label">SMTP host (for sending)</label>
+                            <input type="text" name="smtp_host" class="input" placeholder="smtp.example.com" id="customSmtpHost">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Port</label>
+                            <input type="number" name="smtp_port" class="input" value="587" id="customSmtpPort">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2M5 12V7a5 5 0 0110 0v5M4 12h12a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6a2 2 0 012-2z"/></svg>
+                    Connect Email Account
+                </button>
+            </form>
+
+            <div style="background:var(--gradient-soft); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    <strong style="color:var(--primary); font-size:13.5px;">How to get an App Password</strong>
+                </div>
+                <div id="helpBox" style="font-size:12.5px; line-height:1.6; color:var(--text);">
+                    <ol style="padding-left:18px; margin-bottom:10px;">
+                        <li style="margin-bottom:4px;">Enable <strong>2-Step Verification</strong> on your Google account</li>
+                        <li style="margin-bottom:4px;">Visit <a href="https://myaccount.google.com/apppasswords" target="_blank" id="helpLink" style="color:var(--primary);">Google App Passwords</a></li>
+                        <li style="margin-bottom:4px;">Type any app name (e.g. "Mail Agent")</li>
+                        <li style="margin-bottom:4px;">Click <strong>Create</strong> and copy the 16-character password</li>
+                        <li>Paste it into the form (spaces are OK)</li>
+                    </ol>
+                    <div style="font-size:11.5px; color:var(--text-muted); padding-top:10px; border-top:1px solid var(--border);">
+                        🔒 Your password is stored locally in your database only. It never leaves your machine except to your email provider.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========== OAUTH PANEL =========== -->
+    <div id="tab-oauth" class="tab-panel" style="display:none;">
+        {% if credentials_configured %}
+        <p class="text-sm text-muted mb-4">OAuth credentials are configured. Click below to sign in with Google.</p>
+        <a href="{{ url_for('oauth_connect') }}" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path fill="#fff" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.3h5.9c-.3 1.4-1 2.5-2.2 3.3v2.7h3.5c2-1.9 3.4-4.7 3.4-8.1z"/></svg>
+            Sign in with Google
+        </a>
+        {% else %}
+        <p class="text-sm mb-4">OAuth requires setting up a Google Cloud Project. Only choose this if you need advanced features like sending on your behalf via API.</p>
+        <ol style="padding-left:20px; font-size:13px; line-height:1.75; color:var(--text-muted); margin-bottom:14px;">
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary);">Google Cloud Console → Credentials</a></li>
+            <li>Create a project and enable the <strong>Gmail API</strong></li>
+            <li>Configure the OAuth consent screen (External, Testing mode)</li>
+            <li>Create OAuth Client ID → Web application</li>
+            <li>Add authorized redirect URI: <code style="background:var(--bg-hover); padding:2px 6px; border-radius:4px; font-size:11.5px;">http://localhost:5000/oauth/callback</code></li>
+            <li>Download the JSON and upload it below</li>
+        </ol>
+        <form action="{{ url_for('upload_credentials') }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <input type="file" name="credentials" accept=".json" required class="input" style="padding:8px;">
+                <div class="form-hint">Upload the client_secret*.json file from Google Cloud Console</div>
+            </div>
+            <button type="submit" class="btn btn-secondary">Upload Credentials</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- ==================== AI MODEL ==================== -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">🤖 AI Model</div>
+        <span class="chip" style="background:var(--primary-soft); color:var(--primary);">OpenRouter</span>
+    </div>
+    <p class="text-sm text-muted mb-4">Choose which model powers the AI analysis, chat, and summarization features.</p>
+    <div class="form-group">
+        <label class="form-label">Active model</label>
+        <select class="select" id="modelSelect">
+            <optgroup label="Fast & Free">
+                <option value="meta-llama/llama-3.1-8b-instruct:free" {% if model == 'meta-llama/llama-3.1-8b-instruct:free' %}selected{% endif %}>Llama 3.1 8B (Free)</option>
+                <option value="google/gemma-2-9b-it:free" {% if model == 'google/gemma-2-9b-it:free' %}selected{% endif %}>Gemma 2 9B (Free)</option>
+            </optgroup>
+            <optgroup label="Balanced">
+                <option value="openai/gpt-4o-mini" {% if model == 'openai/gpt-4o-mini' %}selected{% endif %}>GPT-4o mini (recommended)</option>
+                <option value="anthropic/claude-3.5-haiku" {% if model == 'anthropic/claude-3.5-haiku' %}selected{% endif %}>Claude 3.5 Haiku</option>
+                <option value="google/gemini-flash-1.5" {% if model == 'google/gemini-flash-1.5' %}selected{% endif %}>Gemini 1.5 Flash</option>
+            </optgroup>
+            <optgroup label="Advanced">
+                <option value="openai/gpt-4o" {% if model == 'openai/gpt-4o' %}selected{% endif %}>GPT-4o</option>
+                <option value="anthropic/claude-3.5-sonnet" {% if model == 'anthropic/claude-3.5-sonnet' %}selected{% endif %}>Claude 3.5 Sonnet</option>
+                <option value="google/gemini-pro-1.5" {% if model == 'google/gemini-pro-1.5' %}selected{% endif %}>Gemini 1.5 Pro</option>
+            </optgroup>
+        </select>
+        <div class="form-hint">Current: <span class="mono">{{ model }}</span></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="btnSaveModel">Save model choice</button>
+</div>
+
+<!-- ==================== DATA MANAGEMENT ==================== -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">📊 Data Management</div>
+    </div>
+    <p class="text-sm text-muted mb-4">Import, export, and manage your local email database.</p>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <a href="/api/export/csv" class="btn btn-secondary btn-block">Export all emails to CSV</a>
+        <button class="btn btn-secondary btn-block" id="btnLoadDemo">Load demo data (15 sample emails)</button>
+    </div>
+</div>
+
+<!-- ==================== ABOUT ==================== -->
+<div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header">
+        <div class="card-title">ℹ️ About</div>
+    </div>
+    <div class="text-sm" style="line-height:1.75;">
+        <div><strong>App name:</strong> {{ app_name }}</div>
+        <div><strong>Version:</strong> 1.0.0</div>
+        <div><strong>LLM provider:</strong> OpenRouter (multi-model gateway)</div>
+        <div><strong>Email connection:</strong> IMAP with App Password, or Google OAuth 2.0</div>
+        <div style="margin-top:12px;" class="text-muted">
+            An AI-powered email intelligence system that retrieves emails from your inbox, stores them locally,
+            intelligently searches related threads, uses LLMs to summarize conversations and extract insights,
+            and generates professional PDF reports.
+        </div>
+    </div>
+</div>
+
+</div>
+
+<style>
+.tab-btn {
+    background: transparent;
+    border: none;
+    padding: 12px 18px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all .15s ease;
+    font-family: inherit;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.tab-active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+</style>
+
+<script>
+// ---- Tab switching -----------------------------------------
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-active'));
+        btn.classList.add('tab-active');
+        document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+        document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+    });
+});
+
+// ---- Provider preset switching -----------------------------
+const providerSelect = document.getElementById('providerSelect');
+const customFields = document.getElementById('customFields');
+const helpBox = document.getElementById('helpBox');
+const helpLink = document.getElementById('helpLink');
+
+function providerHelp(provider) {
+    const guides = {
+        gmail: `<ol style="padding-left:18px; margin-bottom:10px;">
+            <li style="margin-bottom:4px;">Enable <strong>2-Step Verification</strong> in your Google account</li>
+            <li style="margin-bottom:4px;">Visit <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary);">Google App Passwords</a></li>
+            <li style="margin-bottom:4px;">Type any app name (e.g. "Mail Agent")</li>
+            <li style="margin-bottom:4px;">Click <strong>Create</strong> and copy the 16-character password</li>
+            <li>Paste it into the form (spaces are OK)</li>
+        </ol>`,
+        outlook: `<ol style="padding-left:18px; margin-bottom:10px;">
+            <li style="margin-bottom:4px;">Turn on <strong>Two-step verification</strong> in your Microsoft account</li>
+            <li style="margin-bottom:4px;">Go to <a href="https://account.microsoft.com/security" target="_blank" style="color:var(--primary);">Microsoft Security</a></li>
+            <li style="margin-bottom:4px;">Under "Advanced security", create a new <strong>app password</strong></li>
+            <li>Paste it into the form</li>
+        </ol>`,
+        yahoo: `<ol style="padding-left:18px; margin-bottom:10px;">
+            <li style="margin-bottom:4px;">Enable <strong>2-Step Verification</strong> at <a href="https://login.yahoo.com/account/security" target="_blank" style="color:var(--primary);">Yahoo Security</a></li>
+            <li style="margin-bottom:4px;">Click "Generate app password"</li>
+            <li>Paste the generated password</li>
+        </ol>`,
+        icloud: `<ol style="padding-left:18px; margin-bottom:10px;">
+            <li style="margin-bottom:4px;">Go to <a href="https://appleid.apple.com/account/manage" target="_blank" style="color:var(--primary);">Apple ID account</a></li>
+            <li style="margin-bottom:4px;">In "Sign-In and Security" click <strong>App-Specific Passwords</strong></li>
+            <li style="margin-bottom:4px;">Generate a new password</li>
+            <li>Paste it into the form</li>
+        </ol>`,
+        custom: `<p style="font-size:12.5px;">Enter your email provider's IMAP settings below. Consult your provider for the correct hostnames and ports.</p>`,
+    };
+    return guides[provider] || guides.custom;
+}
+
+providerSelect.addEventListener('change', () => {
+    const opt = providerSelect.options[providerSelect.selectedIndex];
+    const provider = providerSelect.value;
+    customFields.style.display = provider === 'custom' ? 'block' : 'none';
+    helpBox.innerHTML = providerHelp(provider) + `<div style="font-size:11.5px; color:var(--text-muted); padding-top:10px; border-top:1px solid var(--border); margin-top:8px;">🔒 Your password is stored locally in your database only. It never leaves your machine except to your email provider.</div>`;
+    document.getElementById('customImapHost').value = opt.dataset.imapHost || '';
+    document.getElementById('customImapPort').value = opt.dataset.imapPort || 993;
+    document.getElementById('customSmtpHost').value = opt.dataset.smtpHost || '';
+    document.getElementById('customSmtpPort').value = opt.dataset.smtpPort || 587;
+});
+
+// ---- Model save -----------------------------
+document.getElementById('btnSaveModel').addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true);
+    const model = document.getElementById('modelSelect').value;
+    try {
+        await api('/api/settings/model', { method: 'POST', body: { model } });
+        toast('Model updated!', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { busyBtn(ev.currentTarget, false); }
+});
+
+document.getElementById('btnLoadDemo').addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true);
+    try {
+        const r = await api('/api/load-demo', { method: 'POST' });
+        toast(`Loaded ${r.loaded} demo emails`, 'success');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { busyBtn(ev.currentTarget, false); }
+});
+
+</script>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Threads · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Email Threads</h1>
+        <p class="page-subtitle">{{ threads|length }} conversation threads · Grouped by subject</p>
+    </div>
+</div>
+
+<div class="card">
+{% if threads %}
+    <div class="email-list">
+        {% for t in threads %}
+        <a class="email-row" href="/email/{{ (t.thread_id|from_thread_id) if false else '' }}" onclick="event.preventDefault(); openThread({{ t.thread_id|tojson }});">
+            <div class="email-avatar">{{ (t.subject or '?')[0]|upper }}</div>
+            <div class="email-main">
+                <div class="email-top">
+                    <div class="email-sender">{{ t.subject or '(no subject)' }}</div>
+                    <div class="email-date">{{ t.last_date[:10] if t.last_date else '' }}</div>
+                </div>
+                <div class="email-snippet">{{ t.participants }}</div>
+            </div>
+            <div class="email-meta">
+                <span class="chip" style="background: var(--primary-soft); color: var(--primary);">{{ t.message_count }} messages</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12h13M8 6h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <h3>No threads yet</h3>
+        <p>Load emails to see conversation threads.</p>
+        <a href="{{ url_for('index') }}" class="btn btn-primary">Back to dashboard</a>
+    </div>
+{% endif %}
+</div>
+
+<script>
+async function openThread(threadId) {
+    // Fetch first email in thread and redirect to its detail page
+    try {
+        const r = await fetch(`/api/thread/${threadId}/first`);
+        if (r.ok) {
+            const d = await r.json();
+            if (d.email_id) window.location.href = `/email/${d.email_id}`;
+        }
+    } catch (e) { toast('Could not open thread', 'error'); }
+}
+</script>
+{% endblock %}

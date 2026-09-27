@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Reports · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">PDF Reports</h1>
+        <p class="page-subtitle">{{ reports|length }} reports generated · Professional AI insights on demand</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" id="btnNewDigest">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            New Digest Report
+        </button>
+    </div>
+</div>
+
+{% if reports %}
+<div class="report-grid">
+    {% for r in reports %}
+    <div class="report-card" id="report-{{ r.id }}">
+        <div class="report-icon">
+            {% if r.report_type == 'email' %}
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            {% elif r.report_type == 'thread' %}
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h13M8 6h13M8 18h13"/></svg>
+            {% else %}
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg>
+            {% endif %}
+        </div>
+        <div class="report-title">{{ r.title }}</div>
+        <div class="report-meta">
+            <span class="chip">{{ r.report_type }}</span>
+            <span>{{ r.email_count }} emails</span>
+            <span>{{ r.created_at[:10] if r.created_at else '' }}</span>
+        </div>
+        <div class="report-actions">
+            <a href="/reports/{{ r.id }}/download" class="btn btn-primary btn-sm" style="flex:1;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Download
+            </a>
+            <button class="btn btn-danger btn-sm" onclick="deleteReport({{ r.id }})">✕</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        <h3>No reports yet</h3>
+        <p>Generate a PDF report from an email, thread, or executive digest to see it here.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('btnNewDigest').click()">Generate Digest Report</button>
+    </div>
+</div>
+{% endif %}
+
+<script>
+async function deleteReport(id) {
+    if (!confirm('Delete this report? The PDF file will be removed.')) return;
+    try {
+        await api(`/api/report/${id}/delete`, { method: 'POST' });
+        document.getElementById(`report-${id}`).remove();
+        toast('Report deleted', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+}
+window.deleteReport = deleteReport;
+
+document.getElementById('btnNewDigest').addEventListener('click', () => {
+    const form = document.createElement('div');
+    form.innerHTML = `
+        <div class="form-group">
+            <label class="form-label">Report title</label>
+            <input class="input" id="digTitle" value="Executive Email Digest — ${new Date().toLocaleDateString()}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Number of emails to include</label>
+            <select class="select" id="digLimit">
+                <option value="20">Last 20 emails</option>
+                <option value="40" selected>Last 40 emails</option>
+                <option value="80">Last 80 emails</option>
+                <option value="150">Last 150 emails</option>
+            </select>
+            <div class="form-hint">More emails = richer analysis but slower generation</div>
+        </div>
+    `;
+    const footer = document.createElement('div');
+    footer.innerHTML = '<button class="btn btn-primary" id="doDig">Generate PDF</button>';
+    const m = showModal({ title: 'Generate Executive Digest', body: form, footer });
+    footer.querySelector('#doDig').addEventListener('click', async (ev) => {
+        busyBtn(ev.currentTarget, true, 'Generating (30-60s)...');
+        const title = form.querySelector('#digTitle').value.trim() || 'Executive Digest';
+        const limit = parseInt(form.querySelector('#digLimit').value);
+        try {
+            const r = await api('/api/report/digest', { method: 'POST', body: { title, limit } });
+            toast('Report generated!', 'success');
+            m.close();
+            setTimeout(() => location.reload(), 500);
+        } catch (e) { toast(e.message, 'error'); busyBtn(ev.currentTarget, false); }
+    });
+});
+</script>
+{% endblock %}

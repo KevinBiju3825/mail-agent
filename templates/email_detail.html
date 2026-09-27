@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}{{ email.subject or 'Email' }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div style="min-width:0; flex:1;">
+        <a href="{{ url_for('emails_page') }}" class="btn btn-ghost btn-sm" style="margin-bottom:8px;">← Back to all emails</a>
+        <h1 class="page-title" style="font-size:22px;">{{ email.subject or '(no subject)' }}</h1>
+        <div class="page-subtitle" style="margin-top:6px;">
+            <strong>{{ email.sender }}</strong>
+            <span style="color:var(--text-subtle);">&lt;{{ email.sender_email }}&gt;</span>
+            · {{ email.date[:19].replace('T',' ') if email.date else '' }}
+        </div>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" id="btnDraft">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M14 10l7-7M18 21H6a2 2 0 01-2-2V5a2 2 0 012-2h9"/></svg>
+            Draft Reply
+        </button>
+        <button class="btn btn-secondary" id="btnAnalyze">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/></svg>
+            {% if analysis %}Re-analyze{% else %}Analyze with AI{% endif %}
+        </button>
+    </div>
+</div>
+
+<div class="grid-3">
+    <div>
+        {% if analysis %}
+        <div class="analysis-block" id="analysisPanel">
+            <div class="analysis-title">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/></svg>
+                AI Analysis
+                <span style="margin-left:auto; font-size:10px; color:var(--text-muted); font-weight:500;">
+                    Sentiment: <span class="sentiment-{{ analysis.sentiment }}">{{ analysis.sentiment|upper }}</span>
+                </span>
+            </div>
+            <div class="analysis-summary">{{ analysis.summary }}</div>
+
+            {% if analysis.key_points %}
+            <div class="card-title" style="font-size:13px; margin-top:14px; margin-bottom:8px;">Key Points</div>
+            <ul class="list-clean">
+                {% for p in analysis.key_points %}<li>{{ p }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if analysis.action_items %}
+            <div class="card-title" style="font-size:13px; margin-top:14px; margin-bottom:8px;">Action Items</div>
+            <ul class="list-clean">
+                {% for a in analysis.action_items %}<li>{{ a }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if analysis.entities %}
+            <div class="card-title" style="font-size:13px; margin-top:14px; margin-bottom:8px;">Entities</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                {% for e in analysis.entities %}<span class="chip">{{ e }}</span>{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if analysis.metadata and analysis.metadata.suggested_response %}
+            <div class="card-title" style="font-size:13px; margin-top:14px; margin-bottom:8px;">Suggested Response</div>
+            <div class="card-body" style="font-style:italic; color:var(--text-muted); font-size:13px;">
+                "{{ analysis.metadata.suggested_response }}"
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Message</div>
+                <div>
+                    {% if email.category %}<span class="chip chip-{{ email.category }}">{{ email.category }}</span>{% endif %}
+                    {% if email.priority %}<span class="chip">Priority {{ email.priority }}/10</span>{% endif %}
+                </div>
+            </div>
+            <div class="thread-body">{{ email.body_text or email.snippet }}</div>
+
+            {% if email.attachments %}
+            <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+                <div class="text-sm font-bold mb-2">Attachments</div>
+                {% for a in email.attachments %}
+                <div class="chip" style="margin-right:6px;">📎 {{ a.filename }} ({{ a.size }} bytes)</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Prominent Summarize Thread & Report button at bottom -->
+            {% set has_related = thread|length > 1 or related|length > 0 %}
+            <div class="thread-report-cta">
+                {% if has_related %}
+                <div class="thread-report-info">
+                    <div class="thread-report-icon">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h13M8 6h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                    </div>
+                    <div>
+                        <div class="thread-report-title">
+                            {% if thread|length > 1 %}This message is part of a thread with {{ thread|length }} messages
+                            {% else %}Found {{ related|length }} related messages{% endif %}
+                        </div>
+                        <div class="thread-report-sub">Generate a complete PDF report with all senders, timeline, decisions, and recommended actions.</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="thread-report-info">
+                    <div class="thread-report-icon">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/></svg>
+                    </div>
+                    <div>
+                        <div class="thread-report-title">Generate detailed PDF for this email</div>
+                        <div class="thread-report-sub">Full AI analysis including summary, key points, action items, and entities.</div>
+                    </div>
+                </div>
+                {% endif %}
+                <button class="btn btn-primary btn-lg" id="btnBigReport">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8"/></svg>
+                    {% if has_related %}Summarize Thread &amp; Generate Report{% else %}Generate PDF Report{% endif %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <!-- Recipient card -->
+        <div class="card mb-4">
+            <div class="card-header"><div class="card-title">Recipient</div></div>
+            <div class="text-sm text-muted">To: <span class="text-primary">{{ email.recipient }}</span></div>
+            {% if email.cc %}<div class="text-sm text-muted mt-2">Cc: {{ email.cc }}</div>{% endif %}
+        </div>
+
+        <!-- Thread panel: always shows if there are related messages -->
+        {% if thread|length > 1 %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="card-title">Conversation Thread</div>
+                <span class="chip" style="background:var(--primary-soft); color:var(--primary);">{{ thread|length }}</span>
+            </div>
+            <div class="thread-list">
+                {% for t in thread %}
+                <a href="{{ url_for('email_detail', email_id=t.id) }}" class="thread-item {% if t.id == email.id %}active{% endif %}">
+                    <div class="email-avatar" style="width:32px; height:32px; font-size:13px;">{{ (t.sender or '?')[0]|upper }}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div class="thread-item-sender">{{ t.sender }}</div>
+                        <div class="thread-item-date">{{ t.date[:16].replace('T',' ') if t.date else '' }}</div>
+                        <div class="thread-item-snippet">{{ (t.snippet or '')[:70] }}</div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif related %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="card-title">Related Messages</div>
+                <span class="chip" style="background:var(--accent-soft); color:var(--accent);">{{ related|length }}</span>
+            </div>
+            <div class="text-xs text-muted mb-2" style="padding-bottom:8px; border-bottom:1px solid var(--border);">Matched by subject or sender</div>
+            <div class="thread-list">
+                {% for r in related %}
+                <a href="{{ url_for('email_detail', email_id=r.id) }}" class="thread-item">
+                    <div class="email-avatar" style="width:32px; height:32px; font-size:13px;">{{ (r.sender or '?')[0]|upper }}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div class="thread-item-sender">{{ r.sender }}</div>
+                        <div class="thread-item-date">{{ r.date[:16].replace('T',' ') if r.date else '' }}</div>
+                        <div class="thread-item-snippet">{{ (r.subject or '')[:60] }}</div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if thread_analysis %}
+        <div class="analysis-block">
+            <div class="analysis-title">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h13M8 6h13M8 18h13"/></svg>
+                Thread Summary
+            </div>
+            <div class="analysis-summary">{{ thread_analysis.summary }}</div>
+            {% if thread_analysis.metadata and thread_analysis.metadata.decisions_made %}
+            <div class="card-title" style="font-size:12px; margin-top:12px; margin-bottom:6px;">Decisions</div>
+            <ul class="list-clean">
+                {% for d in thread_analysis.metadata.decisions_made %}<li>{{ d }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            {% if thread_analysis.action_items %}
+            <div class="card-title" style="font-size:12px; margin-top:12px; margin-bottom:6px;">Outstanding Actions</div>
+            <ul class="list-clean">
+                {% for a in thread_analysis.action_items %}<li>{{ a }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.thread-report-cta {
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--gradient-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+.thread-report-info {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex: 1;
+    min-width: 240px;
+}
+.thread-report-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.thread-report-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+.thread-report-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+.btn-lg {
+    padding: 12px 22px;
+    font-size: 14px;
+}
+.thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.thread-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--border);
+    background: transparent;
+    transition: all .15s ease;
+}
+.thread-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary);
+    transform: translateX(2px);
+}
+.thread-item.active {
+    background: var(--primary-soft);
+    border-color: var(--primary);
+}
+.thread-item-sender {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+.thread-item-date {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+}
+.thread-item-snippet {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+</style>
+
+<script>
+const emailId = {{ email.id }};
+const threadId = {{ email.thread_id|tojson if email.thread_id else 'null' }};
+const hasRelated = {{ 'true' if (thread|length > 1 or related|length > 0) else 'false' }};
+
+document.getElementById('btnAnalyze').addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true, 'Analyzing...');
+    try {
+        await api(`/api/email/${emailId}/analyze`, { method: 'POST' });
+        toast('Analysis complete!', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch (e) { toast(e.message, 'error'); busyBtn(ev.currentTarget, false); }
+});
+
+// Big prominent button — chooses single-email or full-thread report
+document.getElementById('btnBigReport').addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true, 'Analyzing all messages & building PDF (30-60s)...');
+    try {
+        const endpoint = hasRelated
+            ? `/api/report/related/${emailId}`
+            : `/api/report/email/${emailId}`;
+        const r = await api(endpoint, { method: 'POST' });
+        toast(hasRelated
+            ? `Thread report ready (${r.email_count} messages analyzed)!`
+            : 'Report ready! Downloading...', 'success');
+        setTimeout(() => window.location.href = r.url, 700);
+    } catch (e) { toast(e.message, 'error'); }
+    finally { busyBtn(ev.currentTarget, false); }
+});
+
+document.getElementById('btnDraft').addEventListener('click', () => {
+    const form = document.createElement('div');
+    form.innerHTML = `
+        <div class="form-group">
+            <label class="form-label">Tone</label>
+            <select class="select" id="draftTone">
+                <option value="professional">Professional</option>
+                <option value="friendly">Friendly</option>
+                <option value="formal">Formal</option>
+                <option value="brief">Brief and direct</option>
+                <option value="apologetic">Apologetic</option>
+                <option value="enthusiastic">Enthusiastic</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Intent</label>
+            <textarea class="textarea" id="draftIntent" rows="2" placeholder="What should the reply say? e.g. 'accept the meeting request and suggest Wednesday 3pm'"></textarea>
+        </div>
+        <div id="draftResult" style="margin-top:12px;"></div>
+    `;
+    const footer = document.createElement('div');
+    footer.innerHTML = `<button class="btn btn-primary" id="doDraft">Generate Draft</button>`;
+    const m = showModal({ title: 'Draft a reply with AI', body: form, footer });
+    footer.querySelector('#doDraft').addEventListener('click', async (ev) => {
+        busyBtn(ev.currentTarget, true);
+        const tone = form.querySelector('#draftTone').value;
+        const intent = form.querySelector('#draftIntent').value || 'acknowledge and respond helpfully';
+        try {
+            const r = await api(`/api/email/${emailId}/draft-reply`, { method: 'POST', body: { tone, intent } });
+            form.querySelector('#draftResult').innerHTML = `
+                <div class="form-label">Draft:</div>
+                <textarea class="textarea" rows="10" style="font-family:inherit;">${escapeHtml(r.draft)}</textarea>
+                <div class="text-xs text-muted mt-2">Copy this into your email client, or edit before sending.</div>
+            `;
+        } catch (e) { toast(e.message, 'error'); }
+        finally { busyBtn(ev.currentTarget, false); }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Contacts · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Contacts</h1>
+        <p class="page-subtitle">Manage contacts for sending emails via AI Chat</p>
+    </div>
+</div>
+
+<div class="card" style="max-width:600px;">
+    <div class="card-header">
+        <div class="card-title">Add Contact</div>
+    </div>
+    <form id="addContactForm" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="form-group" style="flex:1; min-width:140px;">
+            <label class="form-label">Name</label>
+            <input type="text" class="input" id="contactName" placeholder="e.g. Mom" required>
+        </div>
+        <div class="form-group" style="flex:2; min-width:200px;">
+            <label class="form-label">Email</label>
+            <input type="email" class="input" id="contactEmail" placeholder="e.g. mom@gmail.com" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="height:42px;">Add</button>
+    </form>
+</div>
+
+<div class="card" style="max-width:600px; margin-top:20px;">
+    <div class="card-header">
+        <div class="card-title">Your Contacts</div>
+        <span class="chip" id="contactCount">{{ contacts|length }}</span>
+    </div>
+    <div id="contactsList">
+        {% if contacts %}
+        {% for c in contacts %}
+        <div class="contact-row" data-id="{{ c.id }}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+            <div>
+                <strong>{{ c.name }}</strong>
+                <span class="text-muted" style="margin-left:8px;">{{ c.email }}</span>
+            </div>
+            <button class="btn btn-ghost btn-sm delete-contact" data-id="{{ c.id }}" title="Remove">✕</button>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted" id="emptyMsg">No contacts yet. Add one above to start sending emails via AI Chat.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.getElementById('addContactForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('contactName').value.trim();
+    const email = document.getElementById('contactEmail').value.trim();
+    if (!name || !email) return;
+    try {
+        const r = await api('/api/contacts', { method: 'POST', body: { name, email } });
+        const empty = document.getElementById('emptyMsg');
+        if (empty) empty.remove();
+        const list = document.getElementById('contactsList');
+        const div = document.createElement('div');
+        div.className = 'contact-row';
+        div.dataset.id = r.id;
+        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);';
+        div.innerHTML = `<div><strong>${escapeHtml(r.name)}</strong><span class="text-muted" style="margin-left:8px;">${escapeHtml(r.email)}</span></div><button class="btn btn-ghost btn-sm delete-contact" data-id="${r.id}" title="Remove">✕</button>`;
+        list.appendChild(div);
+        document.getElementById('contactName').value = '';
+        document.getElementById('contactEmail').value = '';
+        toast('Contact added!', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+});
+
+document.getElementById('contactsList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.delete-contact');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (!confirm('Remove this contact?')) return;
+    try {
+        await api(`/api/contacts/${id}`, { method: 'DELETE' });
+        btn.closest('.contact-row').remove();
+        toast('Contact removed', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+});
+</script>
+{% endblock %}

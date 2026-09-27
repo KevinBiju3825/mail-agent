@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">AI-powered command center for your inbox</p>
+    </div>
+    <div class="page-actions">
+        {% if any_connected %}
+        <button class="btn btn-secondary" id="btnSync">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>
+            Sync Emails
+        </button>
+        {% endif %}
+        <button class="btn btn-secondary" id="btnDemo">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20l9-16H3z"/></svg>
+            Load Demo Data
+        </button>
+        <button class="btn btn-primary" id="btnDigest">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>
+            Generate Digest
+        </button>
+    </div>
+</div>
+
+<div class="metric-grid">
+    <div class="metric">
+        <div class="metric-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+        </div>
+        <div class="metric-label">Total Emails</div>
+        <div class="metric-value">{{ stats.total }}</div>
+        <div class="metric-sub">{{ stats.threads }} conversation threads</div>
+    </div>
+    <div class="metric">
+        <div class="metric-icon" style="background: var(--warning-soft); color: var(--warning);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </div>
+        <div class="metric-label">Unread</div>
+        <div class="metric-value">{{ stats.unread }}</div>
+        <div class="metric-sub">Awaiting your attention</div>
+    </div>
+    <div class="metric">
+        <div class="metric-icon" style="background: var(--accent-soft); color: var(--accent);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/></svg>
+        </div>
+        <div class="metric-label">AI Analyzed</div>
+        <div class="metric-value">{{ stats.analyzed }}</div>
+        <div class="metric-sub">Insights extracted</div>
+    </div>
+    <div class="metric">
+        <div class="metric-icon" style="background: var(--success-soft); color: var(--success);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z M14 2v6h6"/></svg>
+        </div>
+        <div class="metric-label">Reports</div>
+        <div class="metric-value">{{ stats.reports }}</div>
+        <div class="metric-sub">PDF reports generated</div>
+    </div>
+</div>
+
+<div class="grid-3">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Recent Emails</div>
+            <a href="{{ url_for('emails_page') }}" class="btn btn-ghost btn-sm">View all →</a>
+        </div>
+        {% if recent %}
+        <div class="email-list">
+            {% for e in recent %}
+            <a class="email-row {% if not e.is_read %}unread{% endif %}" href="{{ url_for('email_detail', email_id=e.id) }}">
+                <div class="email-avatar">{{ (e.sender or e.sender_email or '?')[0]|upper }}</div>
+                <div class="email-main">
+                    <div class="email-top">
+                        <div class="email-sender">{{ e.sender or e.sender_email }}</div>
+                        <div class="email-date">{{ e.date[:10] if e.date else '' }}</div>
+                    </div>
+                    <div class="email-subject">{{ e.subject or '(no subject)' }}</div>
+                    <div class="email-snippet">{{ e.snippet }}</div>
+                </div>
+                <div class="email-meta">
+                    {% if e.category %}<span class="chip chip-{{ e.category }}">{{ e.category }}</span>{% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            <h3>No emails yet</h3>
+            <p>{% if any_connected %}Sync your inbox to load emails, or{% else %}Connect your email account or{% endif %} load demo data to explore the platform.</p>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                {% if not any_connected %}<a href="{{ url_for('settings_page') }}" class="btn btn-primary">Connect Email</a>{% endif %}
+                <button class="btn btn-secondary" onclick="document.getElementById('btnDemo').click()">Load Demo Data</button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="card-title">Email Activity</div>
+                <span class="text-xs text-muted">Last 30 days</span>
+            </div>
+            {% if timeline %}
+            <div class="timeline-chart">
+                {% set max_val = timeline|map(attribute='c')|max %}
+                {% for point in timeline %}
+                    {% set pct = (point.c / max_val * 100) if max_val > 0 else 0 %}
+                    <div class="timeline-bar" style="height: {{ pct }}%;" data-value="{{ point.day }}: {{ point.c }}" title="{{ point.day }}: {{ point.c }} emails"></div>
+                {% endfor %}
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-muted); margin-top:8px;">
+                <span>{{ timeline[0].day if timeline else '' }}</span>
+                <span>{{ timeline[-1].day if timeline else '' }}</span>
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:20px;">
+                <p class="text-sm">Activity chart will appear once emails are loaded.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Top Senders</div>
+            </div>
+            {% if stats.top_senders %}
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                {% for s in stats.top_senders %}
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="email-avatar" style="width:32px; height:32px; font-size:13px;">{{ (s.sender or '?')[0]|upper }}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.sender or s.sender_email }}</div>
+                        <div style="font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.sender_email }}</div>
+                    </div>
+                    <div style="font-size:13px; font-weight:700; color:var(--primary);">{{ s.c }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-muted text-center" style="padding:20px 0;">No senders yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">
+        <div class="card-title">Quick Actions</div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px;">
+        <a href="{{ url_for('chat_page') }}" class="report-card">
+            <div class="report-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+            <div class="report-title">Chat with your emails</div>
+            <div class="text-sm text-muted">Ask questions and get answers from your inbox using AI</div>
+        </a>
+        <button class="report-card" onclick="bulkCategorize()" style="text-align:left; cursor:pointer; font-family:inherit; border:1px solid var(--border);">
+            <div class="report-icon" style="background: linear-gradient(135deg, #10b981, #22d3ee);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10M7 12h10M7 17h6"/></svg></div>
+            <div class="report-title">Auto-categorize batch</div>
+            <div class="text-sm text-muted">Let AI classify uncategorized emails automatically</div>
+        </button>
+        <a href="{{ url_for('analytics_page') }}" class="report-card">
+            <div class="report-icon" style="background: linear-gradient(135deg, #f59e0b, #ef4444);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg></div>
+            <div class="report-title">View analytics</div>
+            <div class="text-sm text-muted">Trends, categories, and correspondent insights</div>
+        </a>
+        <a href="{{ url_for('reports_page') }}" class="report-card">
+            <div class="report-icon" style="background: linear-gradient(135deg, #ec4899, #a855f7);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/></svg></div>
+            <div class="report-title">Browse reports</div>
+            <div class="text-sm text-muted">Download and manage AI-generated PDF reports</div>
+        </a>
+    </div>
+</div>
+
+<script>
+document.getElementById('btnDemo')?.addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true, 'Loading demo...');
+    try {
+        const r = await api('/api/load-demo', { method: 'POST' });
+        toast(`Loaded ${r.loaded} demo emails`, 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch (e) { toast(e.message, 'error'); busyBtn(ev.currentTarget, false); }
+});
+
+document.getElementById('btnSync')?.addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true, 'Syncing...');
+    try {
+        const r = await api('/api/sync', { method: 'POST', body: { limit: 50 } });
+        toast(`Synced ${r.synced} messages from ${r.account}`, 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch (e) { toast(e.message, 'error'); busyBtn(ev.currentTarget, false); }
+});
+
+document.getElementById('btnDigest')?.addEventListener('click', async (ev) => {
+    busyBtn(ev.currentTarget, true, 'Generating digest...');
+    try {
+        const r = await api('/api/report/digest', { method: 'POST', body: { limit: 40, title: 'Executive Email Digest' } });
+        toast('Digest report generated!', 'success');
+        setTimeout(() => window.location.href = r.url, 500);
+    } catch (e) { toast(e.message, 'error'); }
+    finally { busyBtn(ev.currentTarget, false); }
+});
+
+async function bulkCategorize() {
+    toast('Categorizing emails...', 'info');
+    try {
+        const r = await api('/api/bulk-categorize', { method: 'POST', body: { limit: 15 } });
+        toast(`Categorized ${r.updated} emails (${r.remaining} remaining)`, 'success');
+        setTimeout(() => location.reload(), 1200);
+    } catch (e) { toast(e.message, 'error'); }
+}
+window.bulkCategorize = bulkCategorize;
+</script>
+{% endblock %}
